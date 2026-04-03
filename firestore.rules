@@ -1,0 +1,247 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - email: string (required)
+    //   - role: string (required, 'admin' or 'staff')
+    //   - name: string (optional)
+    //
+    // Collection: students
+    // Document ID: {studentId}
+    // Fields: name, class, gender, status, regDate, regFee, tranche1, tranche2, remainingTr1, remainingTr2, totalRemaining (all required)
+    //
+    // Collection: expenses
+    // Document ID: {expenseId}
+    // Fields: type, description, amount, date (all required)
+    //
+    // Collection: payments
+    // Document ID: {paymentId}
+    // Fields: studentId, studentName, amount, date, type (all required)
+    //
+    // Collection: config
+    // Document ID: main
+    // Fields: registrationFee, tranche1Fee, tranche2Fee, tranche2FeeMaternelle, classes, tranche1Deadline, tranche2Deadline, academicYears, currentAcademicYear, reminderThreshold, whatsappTemplate, schoolName, schoolAddress, schoolPhone, schoolEmail, schoolLogo (all required or optional)
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == "wanalebatoula@gmail.com" ||
+        request.auth.token.email == "batoulawanale@gmail.com"
+      );
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isTeacher() {
+      return isAuthenticated() && (
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher'
+      );
+    }
+
+    function isStaff() {
+      return isAuthenticated() && (
+        isAdmin() ||
+        isTeacher() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'staff')
+      );
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'role']) &&
+             data.email is string &&
+             data.role in ['admin', 'staff', 'teacher'] &&
+             (!('name' in data) || data.name is string) &&
+             (!('assignedClasses' in data) || data.assignedClasses is list);
+    }
+
+    function isValidStudent(data) {
+      return data.keys().hasAll(['name', 'class', 'gender', 'status', 'regDate', 'regFee', 'tranche1', 'tranche2', 'remainingTr1', 'remainingTr2', 'totalRemaining', 'academicYear']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.class is string && data.class.size() > 0 && data.class.size() < 20 &&
+             data.gender in ['G', 'F'] &&
+             data.status in ['N', 'A'] &&
+             data.regDate is string && data.regDate.size() < 20 &&
+             data.regFee is number && data.regFee >= 0 &&
+             data.tranche1 is number && data.tranche1 >= 0 &&
+             data.tranche2 is number && data.tranche2 >= 0 &&
+             data.remainingTr1 is number && data.remainingTr1 >= 0 &&
+             data.remainingTr2 is number && data.remainingTr2 >= 0 &&
+             data.totalRemaining is number && data.totalRemaining >= 0 &&
+             data.academicYear is string && data.academicYear.size() > 0 &&
+             (!('dob' in data) || (data.dob is string && data.dob.size() < 20)) &&
+             (!('pob' in data) || (data.pob is string && data.pob.size() < 50)) &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() < 20)) &&
+             (!('email' in data) || (data.email is string && data.email.size() < 100)) &&
+             (!('discount' in data) || (data.discount is number && data.discount >= 0)) &&
+             (!('tranche1Deadline' in data) || (data.tranche1Deadline is string && data.tranche1Deadline.size() < 20)) &&
+             (!('tranche2Deadline' in data) || (data.tranche2Deadline is string && data.tranche2Deadline.size() < 20));
+    }
+
+    function isValidExpense(data) {
+      return data.keys().hasAll(['type', 'description', 'amount', 'date', 'academicYear']) &&
+             data.type in ['fonctionnement', 'salaire', 'travaux', 'banque', 'cotisation'] &&
+             data.description is string && data.description.size() > 0 && data.description.size() < 200 &&
+             data.amount is number && data.amount > 0 &&
+             data.date is string && data.date.size() < 20 &&
+             data.academicYear is string && data.academicYear.size() > 0 &&
+             (!('teacherId' in data) || data.teacherId is string);
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasAll(['studentId', 'studentName', 'amount', 'date', 'type', 'academicYear']) &&
+             data.studentId is string && data.studentId.size() > 0 && data.studentId.size() < 50 &&
+             data.studentName is string && data.studentName.size() > 0 && data.studentName.size() < 100 &&
+             data.amount is number && data.amount > 0 &&
+             data.date is string && data.date.size() < 20 &&
+             data.type in ['inscription', 'tranche1', 'tranche2'] &&
+             data.academicYear is string && data.academicYear.size() > 0;
+    }
+
+    function isValidAttendance(data) {
+      return data.keys().hasAll(['studentId', 'date', 'status', 'academicYear']) &&
+             data.studentId is string &&
+             data.date is string &&
+             data.status in ['present', 'absent', 'late'] &&
+             data.academicYear is string;
+    }
+
+    function isValidFunding(data) {
+      return data.keys().hasAll(['source', 'amount', 'academicYear']) &&
+             data.source is string &&
+             data.amount is number &&
+             data.academicYear is string;
+    }
+
+    function isValidConfig(data) {
+      return data.keys().hasAll(['registrationFee', 'tranche1Fee', 'tranche2Fee', 'classes', 'currentAcademicYear', 'academicYears']) &&
+             data.registrationFee is number && data.registrationFee >= 0 &&
+             data.tranche1Fee is number && data.tranche1Fee >= 0 &&
+             data.tranche2Fee is number && data.tranche2Fee >= 0 &&
+             data.classes is list && data.classes.size() < 50 &&
+             data.currentAcademicYear is string &&
+             data.academicYears is list &&
+             (!('tranche1Deadline' in data) || (data.tranche1Deadline is string && data.tranche1Deadline.size() < 20)) &&
+             (!('tranche2Deadline' in data) || (data.tranche2Deadline is string && data.tranche2Deadline.size() < 20)) &&
+             (!('tranche2FeeMaternelle' in data) || (data.tranche2FeeMaternelle is number && data.tranche2FeeMaternelle >= 0)) &&
+             (!('reminderThreshold' in data) || (data.reminderThreshold is number && data.reminderThreshold >= 0)) &&
+             (!('whatsappTemplate' in data) || (data.whatsappTemplate is string && data.whatsappTemplate.size() < 1000)) &&
+             (!('schoolName' in data) || (data.schoolName is string && data.schoolName.size() < 100)) &&
+             (!('schoolAddress' in data) || (data.schoolAddress is string && data.schoolAddress.size() < 200)) &&
+             (!('schoolPhone' in data) || (data.schoolPhone is string && data.schoolPhone.size() < 50)) &&
+             (!('schoolEmail' in data) || (data.schoolEmail is string && data.schoolEmail.size() < 100)) &&
+             (!('schoolLogo' in data) || (data.schoolLogo is string && data.schoolLogo.size() < 50000)) &&
+             (!('paymentConfirmationTemplate' in data) || (data.paymentConfirmationTemplate is string && data.paymentConfirmationTemplate.size() < 1000)) &&
+             (!('subjects' in data) || data.subjects is list);
+    }
+
+    function isValidGrade(data) {
+      return data.keys().hasAll(['studentId', 'subjectId', 'trimester', 'academicYear', 'evaluations', 'cote', 'observation']) &&
+             data.studentId is string &&
+             data.subjectId is string &&
+             data.trimester in [1, 2, 3] &&
+             data.academicYear is string &&
+             data.evaluations is map &&
+             data.cote is string &&
+             data.observation is string;
+    }
+
+    function isValidReportCard(data) {
+      return data.keys().hasAll(['studentId', 'trimester', 'academicYear', 'discipline', 'appreciation']) &&
+             data.studentId is string &&
+             data.trimester in [1, 2, 3] &&
+             data.academicYear is string &&
+             data.discipline is map &&
+             data.appreciation is string;
+    }
+
+    // Rules
+    match /users/{userId} {
+      allow read: if isStaff() || request.auth.uid == userId;
+      allow create: if isAdmin() && isValidUser(request.resource.data);
+      allow update: if isAdmin() && isValidUser(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /students/{studentId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && isValidStudent(request.resource.data);
+      allow update: if isStaff() && isValidStudent(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /expenses/{expenseId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && isValidExpense(request.resource.data);
+      allow update: if isStaff() && isValidExpense(request.resource.data);
+      allow delete: if isStaff();
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && isValidPayment(request.resource.data);
+      allow update: if isStaff() && isValidPayment(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /attendance/{recordId} {
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /teacher_attendance/{recordId} {
+      allow read: if isStaff();
+      allow create: if isStaff();
+      allow update: if isStaff();
+      allow delete: if isAdmin();
+    }
+
+    match /funding/{fundingId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && isValidFunding(request.resource.data);
+      allow update: if isAdmin() && isValidFunding(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /config/main {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidConfig(request.resource.data);
+      allow update: if isStaff() && isValidConfig(request.resource.data);
+      allow delete: if false; // Config should not be deleted
+    }
+
+    match /grades/{gradeId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && isValidGrade(request.resource.data);
+      allow update: if isStaff() && isValidGrade(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /report_cards/{cardId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && isValidReportCard(request.resource.data);
+      allow update: if isStaff() && isValidReportCard(request.resource.data);
+      allow delete: if isAdmin();
+    }
+  }
+}

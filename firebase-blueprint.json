@@ -1,0 +1,144 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "An authorized user of the application",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "staff"] },
+        "name": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "A registered student",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "class": { "type": "string" },
+        "dob": { "type": "string" },
+        "pob": { "type": "string" },
+        "gender": { "type": "string", "enum": ["G", "F"] },
+        "phone": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "status": { "type": "string", "enum": ["N", "A"] },
+        "regDate": { "type": "string" },
+        "regFee": { "type": "number" },
+        "tranche1": { "type": "number" },
+        "tranche2": { "type": "number" },
+        "remainingTr1": { "type": "number" },
+        "remainingTr2": { "type": "number" },
+        "totalRemaining": { "type": "number" },
+        "tranche1Deadline": { "type": "string" },
+        "tranche2Deadline": { "type": "string" }
+      },
+      "required": ["name", "class", "gender", "status", "regDate", "regFee", "tranche1", "tranche2", "remainingTr1", "remainingTr2", "totalRemaining"]
+    },
+    "Expense": {
+      "title": "Expense",
+      "description": "A school expense",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["fonctionnement", "salaire", "travaux"] },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" }
+      },
+      "required": ["type", "description", "amount", "date"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "A payment made by a student",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "type": { "type": "string", "enum": ["inscription", "tranche1", "tranche2"] },
+        "academicYear": { "type": "string" }
+      },
+      "required": ["studentId", "studentName", "amount", "date", "type", "academicYear"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "An attendance record",
+      "type": "object",
+      "properties": {
+        "studentId": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["present", "absent", "late"] },
+        "academicYear": { "type": "string" }
+      },
+      "required": ["studentId", "date", "status", "academicYear"]
+    },
+    "Funding": {
+      "title": "Funding",
+      "description": "A funding source",
+      "type": "object",
+      "properties": {
+        "source": { "type": "string" },
+        "amount": { "type": "number" },
+        "academicYear": { "type": "string" }
+      },
+      "required": ["source", "amount", "academicYear"]
+    },
+    "SchoolConfig": {
+      "title": "SchoolConfig",
+      "description": "School configuration",
+      "type": "object",
+      "properties": {
+        "registrationFee": { "type": "number" },
+        "tranche1Fee": { "type": "number" },
+        "tranche2Fee": { "type": "number" },
+        "tranche2FeeMaternelle": { "type": "number" },
+        "classes": { "type": "array", "items": { "type": "string" } },
+        "tranche1Deadline": { "type": "string" },
+        "tranche2Deadline": { "type": "string" },
+        "academicYears": { "type": "array", "items": { "type": "string" } },
+        "currentAcademicYear": { "type": "string" },
+        "reminderThreshold": { "type": "number" },
+        "whatsappTemplate": { "type": "string" },
+        "schoolName": { "type": "string" },
+        "schoolAddress": { "type": "string" },
+        "schoolPhone": { "type": "string" },
+        "schoolEmail": { "type": "string" },
+        "schoolLogo": { "type": "string" },
+        "paymentConfirmationTemplate": { "type": "string" }
+      },
+      "required": ["registrationFee", "tranche1Fee", "tranche2Fee", "classes", "currentAcademicYear"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Authorized users"
+    },
+    "/students/{studentId}": {
+      "schema": { "$ref": "#/entities/Student" },
+      "description": "Students list"
+    },
+    "/expenses/{expenseId}": {
+      "schema": { "$ref": "#/entities/Expense" },
+      "description": "Expenses list"
+    },
+    "/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/Payment" },
+      "description": "Payments list"
+    },
+    "/attendance/{recordId}": {
+      "schema": { "$ref": "#/entities/Attendance" },
+      "description": "Attendance records"
+    },
+    "/funding/{fundingId}": {
+      "schema": { "$ref": "#/entities/Funding" },
+      "description": "Funding sources"
+    },
+    "/config/main": {
+      "schema": { "$ref": "#/entities/SchoolConfig" },
+      "description": "Main school configuration"
+    }
+  }
+}
